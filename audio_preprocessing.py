@@ -8,6 +8,7 @@ import torchaudio
 import torchaudio.transforms as T
 import numpy as np
 import matplotlib.pyplot as plt
+import tensorflow as tf
 
 # default params from T3 paper
 SAMPLE_RATE = 16000
@@ -15,43 +16,30 @@ HOP_WIDTH = 128
 MEL_BINS = 512
 FFT_SIZE = 2048
 frames_per_second = SAMPLE_RATE / HOP_WIDTH
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def load_wav(wav):
     # load takes path and returns tensor representation and sample rate
     # tensor is default shape (channels, time)
     samples, _ = torchaudio.load(wav)
-    return samples
+    # downsample
+    samples = torchaudio.functional.resample(samples, _, SAMPLE_RATE)
+    # data is stereo so mean to get mono
+    return torch.mean(samples, dim=0, keepdim=True)
 
 
 def _audio_to_frames(samples):
     """Convert audio samples to non-overlapping frames and frame times."""
     frame_size = HOP_WIDTH
-    samples = np.pad(samples, [0, frame_size - len(samples) % frame_size], mode='constant')
 
-    frames = frame(torch.tensor(samples), frame_length=HOP_WIDTH, frame_step=HOP_WIDTH, pad_end=True)
-
+    print(('Padding %d samples to multiple of %d' % (len(torch.flatten(samples)), frame_size)))
+    samples = np.pad(torch.flatten(samples), [0, frame_size - len(samples) % frame_size], mode='constant')
+    frames = tf.signal.frame(torch.tensor(samples), frame_length=HOP_WIDTH, frame_step=HOP_WIDTH, pad_end=True)
     num_frames = len(samples) // frame_size
-
+    print('Encoded %d samples to %d frames (%d samples each)' % (len(samples), num_frames, frame_size))
     times = np.arange(num_frames) / frames_per_second
     return frames, times
-
-
-def frame(signal, frame_length, frame_step, pad_end=False, pad_value=0, axis=-1):
-    """
-    equivalent of tf.signal.frame
-    """
-    signal_length = signal.shape[axis]
-    if pad_end:
-        frames_overlap = frame_length - frame_step
-        rest_samples = np.abs(signal_length - frames_overlap) % np.abs(frame_length - frames_overlap)
-        pad_size = int(frame_length - rest_samples)
-        if pad_size != 0:
-            pad_axis = [0] * signal.ndim
-            pad_axis[axis] = pad_size
-            signal = F.pad(signal, pad_axis, "constant", pad_value)
-    frames = signal.unfold(axis, frame_length, frame_step)
-    return frames
 
 
 def load_metadata(path):
@@ -97,19 +85,21 @@ if __name__ == "__main__":
     data_path = 'data/maestro-v3.0.0/'
     meta = load_metadata(data_path + 'maestro-v3.0.0.json')
     # example = wav_to_dict(data_path, meta)
-    samples = load_wav(data_path + meta['audio_filename']['0'])
-    # samples = np.pad(samples, [0, hop_width - len(samples) % hop_width], mode='constant')
 
+    samplesm = load_wav(data_path + meta['audio_filename']['0'])
     mel_spectrogram = T.MelSpectrogram(
         sample_rate=SAMPLE_RATE,
         n_fft=FFT_SIZE,
         hop_length=HOP_WIDTH,
     )
 
-    melspec = mel_spectrogram(samples)
+    melspec = mel_spectrogram(samplesm)
     print(torchaudio.info(data_path + meta['audio_filename']['0']))
-    print(samples.shape)
-    print(_audio_to_frames(samples)[0].shape)
+    print(samplesm.shape)
+    framesm, timesm = _audio_to_frames(samplesm)
+    print(framesm.shape)
+    print(timesm.shape)
+    print(framesm[0])
     print(melspec.shape)
     plot_spectrogram(
         melspec[0], title="MelSpectrogram - torchaudio", ylabel='mel freq')
