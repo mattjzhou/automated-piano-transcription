@@ -10,11 +10,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
 
-# default params from T3 paper, may need to adjust based on memory requirements
+# default params from MT3 paper, may need to adjust based on memory requirements
 SAMPLE_RATE = 16000
 HOP_WIDTH = 128
 MEL_BINS = 512
 FFT_SIZE = 2048
+SEQ_SIZE = 511  # + 1 EOS
 frames_per_second = SAMPLE_RATE / HOP_WIDTH
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -78,38 +79,52 @@ def plot_spectrogram(spec, title=None, ylabel='freq_bin', aspect='auto', xmax=No
 # specs are the mel spectrograms in the shape (frames, mel_bins)
 def wav_to_save(path, metadata, spectrogram):
     train, test, val = 'train', 'test', 'val'
+    raw, time, spect = 'raw/', 'times/', 'spec/'
     samplepath, timepath, specpath = '', '', ''
     for i in range(len(metadata['duration'])):
         samples, times = tokenize(path + metadata['audio_filename'][str(i)])
         # transpose for shape (frames, mel_bins)
-        spec = spectrogram(torch.reshape(samples, [-1])).numpy().T
-        samples = samples.numpy()
+        spec = spectrogram(torch.flatten(samples))
+        spec = split_spec(spec)
+        # samples = samples.numpy()
         if metadata['split'][str(i)] == 'train':
-            samplepath = train + '_raw_' + str(i)
-            timepath = train + '_time_' + str(i)
-            specpath = train + '_spec_' + str(i)
+            # samplepath = raw + train + '_raw_' + str(i)
+            timepath = time + train + '_time_' + str(i)
+            specpath = spect + train + '_spec_' + str(i)
             os.chdir("D:/dlp/train/")
         elif metadata['split'][str(i)] == 'test':
-            samplepath = test + '_raw_' + str(i)
-            timepath = test + '_time_' + str(i)
-            specpath = test + '_spec_' + str(i)
+            # samplepath = raw + test + '_raw_' + str(i)
+            timepath = time + test + '_time_' + str(i)
+            specpath = spect + test + '_spec_' + str(i)
             os.chdir("D:/dlp/test/")
         elif metadata['split'][str(i)] == 'validation':
-            samplepath = val + '_raw_' + str(i)
-            timepath = val + '_time_' + str(i)
-            specpath = val + '_spec_' + str(i)
+            # samplepath = raw + val + '_raw_' + str(i)
+            timepath = time + val + '_time_' + str(i)
+            specpath = spect + val + '_spec_' + str(i)
             os.chdir("D:/dlp/val/")
-        np.save(samplepath, samples)
+        # np.save(samplepath, samples)
         np.save(timepath, times)
         np.save(specpath, spec)
         os.chdir("C:/Users/Andrew/Documents/GitHub/Deep-Learning-Project")
+
+
+def split_spec(spec):
+    # assumes raw spec, not transposed
+    frame_size = spec.shape[1]
+    # pad such that we can reshape with groups of spec frames SEQ_SIZE long
+    pad_spec = np.pad(spec.numpy().T, ((0, SEQ_SIZE - frame_size % SEQ_SIZE), (0, 0)))
+    # reshape to split
+    pad_spec = pad_spec.reshape((-1, SEQ_SIZE, MEL_BINS))
+    # add EOS as frame of all zeros
+    pad_spec = np.pad(pad_spec, ((0, 0), (0, 1), (0, 0)))
+    return pad_spec
 
 
 if __name__ == "__main__":
     data_path = 'data/maestro-v3.0.0/'
     meta = load_metadata(data_path + 'maestro-v3.0.0.json')
     # example = wav_to_dict(data_path, meta)
-    # samplesm = load_wav(data_path + meta['audio_filename']['0'])
+    #samplesm = load_wav(data_path + meta['audio_filename']['0'])
     # print(samplesm)
     mel_spectrogram = T.MelSpectrogram(
         sample_rate=SAMPLE_RATE,
@@ -117,6 +132,4 @@ if __name__ == "__main__":
         hop_length=HOP_WIDTH,
         n_mels=MEL_BINS
     )
-
-
-
+    # wav_to_save(data_path, meta, mel_spectrogram)
