@@ -4,11 +4,11 @@ import pretty_midi
 import audio_preprocessor
 import numpy as np
 
-SEQ_SIZE = 512
+SEQ_SIZE = 2048
 RANGE_NOTE_ON = 128
 RANGE_NOTE_OFF = 128
 RANGE_VEL = 32
-RANGE_TIME_SHIFT = 100
+RANGE_TIME_SHIFT = 222
 EOS = 511
 PAD = 510
 
@@ -225,7 +225,7 @@ def encode_midi(file_path, times):
 
     dnotes = _divide_note(notes)
 
-    #print(dnotes)
+    # print(dnotes)
     dnotes.sort(key=lambda x: x.time)
     # print('sorted:')
     # print(dnotes)
@@ -233,12 +233,14 @@ def encode_midi(file_path, times):
     for i in times:
         note_seq = []
         for j in dnotes:
-            if j.time > i[0] and j.time < i[-2]:
+            # needs to be fixed, forgot to actually subtract the time
+            if i[0] <= j.time <= i[-2]:
                 note_seq.append(j)
             if j.time > i[-2]:
                 break
         split_notes.append(note_seq)
-
+        # if len(note_seq) > 40:
+        #     print(note_seq)
     split_events = []
     for dnote in split_notes:
         cur_time = 0
@@ -257,13 +259,18 @@ def encode_midi(file_path, times):
         if len(encoded_events) > SEQ_SIZE:
             print(len(encoded_events))
             print(file_path)
-        encoded_events = np.pad(np.array(encoded_events), (0, SEQ_SIZE - len(encoded_events) % SEQ_SIZE), constant_values=(0, PAD))
+        encoded_events = np.pad(np.array(encoded_events), (0, SEQ_SIZE - len(encoded_events) % SEQ_SIZE),
+                                constant_values=(0, PAD))
         split_events.append(encoded_events)
     return split_events
 
 
 def decode_midi(idx_array, file_path=None):
-    event_sequence = [Event.from_int(idx) for idx in idx_array]
+    event_sequence = []
+    for idx in idx_array:
+        if idx != EOS and idx != PAD:
+            event_sequence.append(Event.from_int(idx))
+    # event_sequence = [Event.from_int(idx) for idx in idx_array]
     # print(event_sequence)
     snote_seq = _event_seq2snote_seq(event_sequence)
     note_seq = _merge_note(snote_seq)
@@ -320,20 +327,24 @@ if __name__ == '__main__':
 
     proj_path = "C:/Users/Andrew/Documents/GitHub/Deep-Learning-Project"
     save_path = "D:/dlp/"
-    save_encoded(data_path, meta, proj_path, save_path)
+    midi = np.load(save_path + 'train/midi/train_midi_166.npy')
+    print(midi[143])
+    decode_midi(midi[143], "som.mid")
 
-    # times = np.load('D:/dlp/train/times/train_time_0.npy')
-    # encoded = encode_midi(data_path + meta['midi_filename']['0'], times)
+    # save_encoded(data_path, meta, proj_path, save_path)
+
+    # times = np.load('D:/dlp/train/times/train_time_21.npy')
+    # encoded = encode_midi("data/maestro-v3.0.0/2018/MIDI-Unprocessed_Recital5-7_MID--AUDIO_07_R1_2018_wav--2.midi", times)
     # print(np.array(encoded).shape)
     # print(encoded)
-    #print(len(encoded))
-    #print(encoded)
-    #decided = decode_midi(encoded, file_path='test.mid')
+    # print(len(encoded))
+    # print(encoded)
+    # decided = decode_midi(encoded, file_path='test.mid')
 
-    #ins = pretty_midi.PrettyMIDI('test.mid')
+    ins = pretty_midi.PrettyMIDI('som.mid')
     # print(ins)
     # print(ins.instruments[0])
-    #print(len(ins.instruments[0].notes))
-    #for i in ins.instruments:
-        #print(i.control_changes)
-        #print(i.notes)
+    # print(len(ins.instruments[0].notes))
+    for i in ins.instruments:
+        # print(i.control_changes)
+        print(i.notes)

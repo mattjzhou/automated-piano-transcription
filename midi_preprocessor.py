@@ -1,13 +1,24 @@
 import os
 
+import mido
 import pretty_midi
 import numpy as np
 
 from audio_preprocessor import load_metadata
 
-# having max 512 events for each spec sequence seems reasonable
-SEQ_SIZE = 512
+# 1024 events per thing
+SEQ_SIZE = 1024
+EOS = 1
+RANGE_NOTE_ON = 128
+RANGE_VEL = 128
+RANGE_TIME_SHIFT = 100
 
+START_IDX = {
+    'note_on': 0,
+    'note_off': RANGE_NOTE_ON,
+    'time_shift': RANGE_NOTE_ON + RANGE_NOTE_OFF,
+    'velocity': RANGE_NOTE_ON + RANGE_NOTE_OFF + RANGE_TIME_SHIFT
+}
 
 # converts a midi note to two events, note_on and note_off
 # each array has format [time, pitch, velocity, note_off]
@@ -37,8 +48,10 @@ def midi_to_array_by_sequence(midi_path, times):
         end_time = seq[-2]
         seq_midi = midi[midi[:, 0] >= start_time]
         seq_midi = seq_midi[seq_midi[:, 0] <= end_time]
-        np.append(seq_midi, np.zeros(4))
-        seq_midi = np.pad(seq_midi, ((0, SEQ_SIZE - seq_midi.shape[0] % SEQ_SIZE),(0,0)))
+        seq_midi[:, 0] -= start_time
+        np.append(seq_midi, np.zeros(4) - 1)
+        print(seq_midi)
+        seq_midi = np.pad(seq_midi, ((0, SEQ_SIZE - seq_midi.shape[0] % SEQ_SIZE), (0, 0)))
         split_midi.append(seq_midi)
     split_midi = np.array(split_midi)
 
@@ -88,4 +101,8 @@ if __name__ == '__main__':
             print(note)
     proj_path = "C:/Users/Andrew/Documents/GitHub/Deep-Learning-Project"
     save_path = "D:/dlp/"
-    # save_midi_as_npy(data_path, meta, proj_path, save_path)
+    #save_midi_as_npy(data_path, meta, proj_path, save_path)
+
+    # times = load_time(meta, 0, proj_path, save_path)
+    # somethign = midi_to_array_by_sequence(data_path + meta['midi_filename']['0'], times)
+
