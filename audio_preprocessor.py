@@ -83,9 +83,10 @@ def wav_to_save(path, metadata, spectrogram):
     samplepath, timepath, specpath = '', '', ''
     for i in range(len(metadata['duration'])):
         samples, times = tokenize(path + metadata['audio_filename'][str(i)])
+        times = split_time(times)
         # transpose for shape (frames, mel_bins)
-        spec = spectrogram(torch.flatten(samples))
-        spec = split_spec(spec)
+        # spec = spectrogram(torch.flatten(samples))
+        # spec = split_spec(spec)
         # samples = samples.numpy()
         if metadata['split'][str(i)] == 'train':
             # samplepath = raw + train + '_raw_' + str(i)
@@ -104,8 +105,17 @@ def wav_to_save(path, metadata, spectrogram):
             os.chdir("D:/dlp/val/")
         # np.save(samplepath, samples)
         np.save(timepath, times)
-        np.save(specpath, spec)
+        # np.save(specpath, spec)
         os.chdir("C:/Users/Andrew/Documents/GitHub/Deep-Learning-Project")
+
+
+# splitting everything into sequences is probably most convenient
+def split_time(times):
+    frame_size = len(times)
+    pad_times = np.pad(times, (0, SEQ_SIZE - frame_size % SEQ_SIZE))
+    pad_times = pad_times.reshape((-1, SEQ_SIZE))
+    pad_times = np.pad(pad_times, ((0, 0), (0, 1)))
+    return pad_times
 
 
 def split_spec(spec):
@@ -124,7 +134,7 @@ if __name__ == "__main__":
     data_path = 'data/maestro-v3.0.0/'
     meta = load_metadata(data_path + 'maestro-v3.0.0.json')
     # example = wav_to_dict(data_path, meta)
-    #samplesm = load_wav(data_path + meta['audio_filename']['0'])
+    # samplesm = load_wav(data_path + meta['audio_filename']['0'])
     # print(samplesm)
     mel_spectrogram = T.MelSpectrogram(
         sample_rate=SAMPLE_RATE,
@@ -132,4 +142,4 @@ if __name__ == "__main__":
         hop_length=HOP_WIDTH,
         n_mels=MEL_BINS
     )
-    # wav_to_save(data_path, meta, mel_spectrogram)
+    wav_to_save(data_path, meta, mel_spectrogram)
