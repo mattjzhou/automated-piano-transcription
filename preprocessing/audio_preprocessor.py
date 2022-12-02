@@ -15,9 +15,15 @@ SAMPLE_RATE = 16000
 HOP_WIDTH = 128
 MEL_BINS = 512
 FFT_SIZE = 2048
-SEQ_SIZE = 127  # + 1 EOS
+SEQ_SIZE = 511  # + 1 EOS
 frames_per_second = SAMPLE_RATE / HOP_WIDTH
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+SPECTROGRAM = T.MelSpectrogram(
+    sample_rate=SAMPLE_RATE,
+    n_fft=FFT_SIZE,
+    hop_length=HOP_WIDTH,
+    n_mels=MEL_BINS
+)
 
 
 def load_wav(wav):
@@ -27,7 +33,7 @@ def load_wav(wav):
     # downsample
     samples = torchaudio.functional.resample(samples, _, SAMPLE_RATE)
     # data is stereo so mean to get mono
-    return torch.mean(samples, dim=0, keepdim=True)
+    return torch.mean(samples, dim=0)
 
 
 # basically copied this, but now wondering why this exists
@@ -35,7 +41,7 @@ def _audio_to_frames(samples):
     """Convert audio samples to non-overlapping frames and frame times."""
     frame_size = HOP_WIDTH
     # print(('Padding %d samples to multiple of %d' % (len(torch.flatten(samples)), frame_size)))
-    samples = np.pad(torch.flatten(samples), [0, frame_size - len(samples) % frame_size], mode='constant')
+    samples = np.pad(samples, [0, frame_size - len(samples) % frame_size], mode='constant')
     frames = tf.signal.frame(torch.tensor(samples), frame_length=HOP_WIDTH, frame_step=HOP_WIDTH, pad_end=True)
     num_frames = len(samples) // frame_size
     # print('Encoded %d samples to %d frames (%d samples each)' % (len(samples), num_frames, frame_size))
@@ -70,6 +76,28 @@ def plot_spectrogram(spec, title=None, ylabel='freq_bin', aspect='auto', xmax=No
     if xmax:
         axs.set_xlim((0, xmax))
     fig.colorbar(im, ax=axs)
+    plt.show(block=False)
+
+
+def plot_waveform(waveform, sample_rate, title="Waveform", xlim=None, ylim=None):
+    waveform = waveform.numpy()
+
+    num_channels, num_frames = waveform.shape
+    time_axis = torch.arange(0, num_frames) / sample_rate
+
+    figure, axes = plt.subplots(num_channels, 1)
+    if num_channels == 1:
+        axes = [axes]
+    for c in range(num_channels):
+        axes[c].plot(time_axis, waveform[c], linewidth=1)
+        axes[c].grid(True)
+        if num_channels > 1:
+            axes[c].set_ylabel(f'Channel {c + 1}')
+        if xlim:
+            axes[c].set_xlim(xlim)
+        if ylim:
+            axes[c].set_ylim(ylim)
+    figure.suptitle(title)
     plt.show(block=False)
 
 
@@ -108,35 +136,36 @@ def wav_to_save(path, metadata, spectrogram):
         print(spec.shape)
         np.save(timepath, times)
         np.save(specpath, spec)
-        os.chdir("C:/Users/Andrew/Documents/GitHub/Deep-Learning-Project")
+        os.chdir("/")
 
 
 # splitting everything into sequences is probably most convenient
-def split_time(times):
+def split_time(times, seq_len):
     frame_size = len(times)
-    pad_times = np.pad(times, (0, SEQ_SIZE - frame_size % SEQ_SIZE))
-    pad_times = pad_times.reshape((-1, SEQ_SIZE))
+    pad_times = np.pad(times, (0, seq_len - frame_size % seq_len))
+    pad_times = pad_times.reshape((-1, seq_len))
     pad_times = np.pad(pad_times, ((0, 0), (0, 1)))
     return pad_times
 
 
-def split_spec(spec):
+def split_spec(spec, seq_len):
     # assumes raw spec, not transposed
     frame_size = spec.shape[1]
     # pad such that we can reshape with groups of spec frames SEQ_SIZE long
-    pad_spec = np.pad(spec.numpy().T, ((0, SEQ_SIZE - frame_size % SEQ_SIZE), (0, 0)))
+    pad_spec = np.pad(spec.numpy().T, ((0, seq_len - frame_size % seq_len), (0, 0)))
     # reshape to split
-    pad_spec = pad_spec.reshape((-1, SEQ_SIZE, MEL_BINS))
+    pad_spec = pad_spec.reshape((-1, seq_len, MEL_BINS))
     # add EOS as frame of all zeros
     pad_spec = np.pad(pad_spec, ((0, 0), (0, 1), (0, 0)))
     return pad_spec
 
 
 if __name__ == "__main__":
-    data_path = 'data/maestro-v3.0.0/'
+    data_path = '../data/maestro-v3.0.0/'
     meta = load_metadata(data_path + 'maestro-v3.0.0.json')
     # example = wav_to_dict(data_path, meta)
-    samplesm = load_wav(data_path + meta['audio_filename']['0'])
+    print(meta['canonical_title']['158'])
+    samplesm = load_wav(data_path + meta['audio_filename']['158'])
     # print(samplesm)
     mel_spectrogram = T.MelSpectrogram(
         sample_rate=SAMPLE_RATE,
@@ -144,6 +173,8 @@ if __name__ == "__main__":
         hop_length=HOP_WIDTH,
         n_mels=MEL_BINS
     )
+    plot_waveform(samplesm, SAMPLE_RATE)
+    samplesm = samplesm.squeeze()
     spec = mel_spectrogram(samplesm)
     plot_spectrogram(spec)
 
