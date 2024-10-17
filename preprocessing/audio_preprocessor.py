@@ -33,6 +33,7 @@ def load_wav(wav):
     # downsample
     samples = torchaudio.functional.resample(samples, _, SAMPLE_RATE)
     # data is stereo so mean to get mono
+    print(samples.shape)
     return torch.mean(samples, dim=0)
 
 
@@ -40,11 +41,13 @@ def load_wav(wav):
 def _audio_to_frames(samples):
     """Convert audio samples to non-overlapping frames and frame times."""
     frame_size = HOP_WIDTH
-    # print(('Padding %d samples to multiple of %d' % (len(torch.flatten(samples)), frame_size)))
+    print(('Padding %d samples to multiple of %d' % (len(torch.flatten(samples)), frame_size)))
     samples = np.pad(samples, [0, frame_size - len(samples) % frame_size], mode='constant')
+    print(samples.shape)
     frames = tf.signal.frame(torch.tensor(samples), frame_length=HOP_WIDTH, frame_step=HOP_WIDTH, pad_end=True)
+    print(frames.shape)
     num_frames = len(samples) // frame_size
-    # print('Encoded %d samples to %d frames (%d samples each)' % (len(samples), num_frames, frame_size))
+    print('Encoded %d samples to %d frames (%d samples each)' % (len(samples), num_frames, frame_size))
     times = np.arange(num_frames) / frames_per_second
     # returns tensor of shape (num_frames, HOP_WIDTH) and times of length(num_frames)
     # this is needed due to using both pytorch and tensorflow, since only tensorflow has the frame function

@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from torch.utils.data import Dataset
-from audio_preprocessor import load_wav, _audio_to_frames, split_time, split_spec
+from audio_preprocessor import load_wav, _audio_to_frames, split_time, split_spec, plot_spectrogram, plot_waveform
 from midi_preprocessor import encode_midi_with_time
 
 
@@ -32,8 +32,11 @@ class MaestroDataset(Dataset):
 
         samples = load_wav(wav_path)
         samples, times = _audio_to_frames(samples)
+        plot_waveform(samples)
         times = split_time(times, self.seq_len)
         spec = self.spectrogram(torch.flatten(samples))
+        print(spec.shape)
+        plot_spectrogram(spec)
         spec = split_spec(spec, self.seq_len)
 
         # get item probably expects one sequence, idk how better to do it but let's just return one random sample
